@@ -1,9 +1,10 @@
 {
   "name": "frame-rpc",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "rpc between iframes and windows using postMessage with no serialization",
   "main": "index.js",
   "dependencies": {
+    "add-event-listener": "0.0.1",
     "has": "~1.0.0",
     "isarray": "~0.0.1"
   },

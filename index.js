@@ -1,5 +1,7 @@
+'use strict';
 var has = require('has');
 var isarray = require('isarray');
+var events = require('add-event-listener');
 
 var VERSION = '1.0.0';
 
@@ -10,33 +12,36 @@ function RPC (src, dst, origin, methods) {
     var self = this;
     this.src = src;
     this.dst = dst;
-    
-    if (origin === '*') {
-        this.origin = '*';
-    }
-    else {
+    this.origin = origin;
+    if (this.origin !== '*' && typeof URL !== 'undefined') {
         var uorigin = new URL(origin);
         this.origin = uorigin.protocol + '//' + uorigin.host;
     }
-    
+
     this._methods = methods || {};
     this._sequence = 0;
     this._callbacks = {};
-    
+
     this._onmessage = function (ev) {
+        var data = {};
         if (self._destroyed) return;
         if (self.origin !== '*' && ev.origin !== self.origin) return;
-        if (!ev.data || typeof ev.data !== 'object') return;
-        if (ev.data.protocol !== 'frame-rpc') return;
-        if (!isarray(ev.data.arguments)) return;
-        self._handle(ev.data);
+        if (!ev.data || typeof ev.data !== 'string') return;
+        try {
+            data = JSON.parse(ev.data);
+        } catch (e) {
+            data = {};
+        }
+        if (data.protocol !== 'frame-rpc') return;
+        if (!isarray(data.arguments)) return;
+        self._handle(data);
     };
-    this.src.addEventListener('message', this._onmessage);
+    events.addEventListener(this.src, 'message', this._onmessage);
 }
 
 RPC.prototype.destroy = function () {
     this._destroyed = true;
-    this.src.removeEventListener('message', this._onmessage);
+    events.removeEventListener(this.src, 'message', this._onmessage);
 };
 
 RPC.prototype.call = function (method) {
@@ -51,27 +56,31 @@ RPC.prototype.apply = function (method, args) {
         this._callbacks[seq] = args[args.length - 1];
         args = args.slice(0, -1);
     }
-    this.dst.postMessage({
+    this._send({
         protocol: 'frame-rpc',
         version: VERSION,
         sequence: seq,
-        method: method, 
+        method: method,
         arguments: args
-    }, this.origin);
+    });
+};
+
+RPC.prototype._send = function (object) {
+    this.dst.postMessage(JSON.stringify(object), this.origin);
 };
 
 RPC.prototype._handle = function (msg) {
     var self = this;
     if (self._destroyed) return;
     if (has(msg, 'method')) {
-        if (!has(this._methods, msg.method)) return;
+        if (typeof this._methods[msg.method] !== 'function') return;
         var args = msg.arguments.concat(function () {
-            self.dst.postMessage({
+            self._send({
                 protocol: 'frame-rpc',
                 version: VERSION,
                 response: msg.sequence,
                 arguments: [].slice.call(arguments)
-            }, self.origin);
+            });
         });
         this._methods[msg.method].apply(this._methods, args);
     }
