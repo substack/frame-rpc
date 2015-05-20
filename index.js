@@ -73,7 +73,7 @@ RPC.prototype._handle = function (msg) {
     var self = this;
     if (self._destroyed) return;
     if (has(msg, 'method')) {
-        if (!has(this._methods, msg.method)) return;
+        if (typeof this._methods[msg.method] !== 'function') return;
         var args = msg.arguments.concat(function () {
             self._send({
                 protocol: 'frame-rpc',
